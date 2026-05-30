@@ -29,6 +29,12 @@ Supported modes:
 - **Interactive mode** (default): opens the curses browser UI
 - **Batch mode**: `./claude_chat_browser.py <path> --all` exports all conversations without opening the UI
 
+Output format control:
+
+- `--output-format both` (default): write both `.md` and `.json`
+- `--output-format md`: write only `.md`
+- `--output-format json`: write only `.json`
+
 Path validation behavior:
 
 - Accepts either a Claude export directory or a direct `conversations.json` file path

@@ -13,13 +13,13 @@ A simple terminal tool that helps you browse and export conversations from your 
 4. Run the tool with `./claude_chat_browser.py <path-to-export-folder-or-conversations.json>`
 5. Browse your conversations with arrow keys
 6. Press Enter to select a conversation
-7. Press Y to export to Markdown and JSON.
+7. Press Y to export using your selected output format.
 
 ## What You Can Do
 
 - **Browse All Conversations**: Newest conversations appear first
 - **See Previews**: View the first few messages before exporting
-- **Export Easily**: Get both Markdown and JSON versions of any conversation
+- **Export Easily**: Save Markdown, JSON, or both
 - **Read Chronologically**: Exported conversations are organized by time with timestamps
 - **No Extra Software Needed**: Uses only standard Python libraries
 
@@ -44,6 +44,12 @@ chmod +x claude_chat_browser.py
 
 # Export all conversations without opening the UI
 ./claude_chat_browser.py ./data-2025-03-02-15-59-23 --all
+
+# Export markdown files only
+./claude_chat_browser.py ./data-2025-03-02-15-59-23 --output-format md
+
+# Export JSON files only (works with --all too)
+./claude_chat_browser.py ./data-2025-03-02-15-59-23 --all --output-format json
 ```
 
 ### Step 3: Navigate and Export
@@ -51,19 +57,21 @@ chmod +x claude_chat_browser.py
 - **Navigate**: Use ↑/↓ arrows to select conversations
 - **Change Pages**: Use ←/→ arrows to move between pages (10 conversations per page)
 - **View Details**: Press Enter to see conversation details
-- **Export**: Press Y when prompted to save as Markdown and JSON
+- **Export**: Press Y when prompted to save in the selected format
 - **Exit**: Press Q to quit
 
 ### What You Get
 
-When you export a conversation, two files are created in the `exports/` folder:
+When you export a conversation, files are created in the `exports/` folder based on `--output-format`:
 
-- **[date]_[name].md**: Easy-to-read Markdown with all messages in order
-- **[date]_[name].json**: Complete structured data you can use in other tools
+- `both` (default): both files below
+- `md`: only `[date]_[name].md` (easy-to-read Markdown)
+- `json`: only `[date]_[name].json` (structured data for tools)
 
 ## Tips
 
 - Pass the export directory or `conversations.json` path via CLI input
+- Use `--output-format md` or `--output-format json` to export a single file type
 - Exported conversations have timestamps so you can see when each message was sent
 - Use the JSON exports if you want to process your conversations with other tools
 

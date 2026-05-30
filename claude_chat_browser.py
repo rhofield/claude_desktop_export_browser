@@ -4,12 +4,13 @@ import json
 import os
 import sys
 import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import curses
 
 class ClaudeChatBrowser:
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, output_format: str = "both"):
         self.data_dir = data_dir
+        self.output_format = output_format
         self.conversations = []
         self.conversations_path = os.path.join(data_dir, "conversations.json")
         self.page_size = 10
@@ -73,8 +74,8 @@ class ClaudeChatBrowser:
         
         return f"{date_str} | {msg_count} msgs | {name}"
     
-    def export_conversation(self, conversation: Dict[str, Any]) -> tuple[str, str]:
-        """Export a conversation to markdown and JSON formats and return the paths."""
+    def export_conversation(self, conversation: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+        """Export a conversation and return exported markdown/json paths (or None when skipped)."""
         # Create a filename based on date and name or ID
         name = conversation.get('name', '') or "conversation"
         name = ''.join(c if c.isalnum() or c in ' _-' else '_' for c in name).strip()
@@ -139,15 +140,20 @@ class ClaudeChatBrowser:
                 else:
                     markdown.append(f"{sender}\n\n{text}\n\n---\n\n")
         
-        # Write markdown to file
-        with open(md_file_path, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(markdown))
-            
-        # Write JSON to file with sorted messages
-        with open(json_file_path, 'w', encoding='utf-8') as f:
-            json.dump(export_conversation, f, indent=2, ensure_ascii=False)
-            
-        return md_file_path, json_file_path
+        exported_md_path = None
+        exported_json_path = None
+
+        if self.output_format in ("both", "md"):
+            with open(md_file_path, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(markdown))
+            exported_md_path = md_file_path
+
+        if self.output_format in ("both", "json"):
+            with open(json_file_path, 'w', encoding='utf-8') as f:
+                json.dump(export_conversation, f, indent=2, ensure_ascii=False)
+            exported_json_path = json_file_path
+
+        return exported_md_path, exported_json_path
 
     def export_all_conversations(self) -> tuple[int, int]:
         """Export all conversations. Returns (successful_exports, failed_exports)."""
@@ -326,7 +332,12 @@ class ClaudeChatBrowser:
             y += 1
         
         # Display export prompt
-        prompt = "Export this conversation to markdown? (y/n)"
+        format_label = {
+            "both": "Markdown and JSON",
+            "md": "Markdown",
+            "json": "JSON",
+        }.get(self.output_format, "Markdown and JSON")
+        prompt = f"Export this conversation to {format_label}? (y/n)"
         stdscr.addstr(height - 3, (width - len(prompt)) // 2, prompt, curses.color_pair(3) | curses.A_BOLD)
         
         stdscr.refresh()
@@ -343,15 +354,18 @@ class ClaudeChatBrowser:
                     
                     # Calculate center positions
                     y_center = height // 2
-                    
-                    md_msg = f"Markdown exported to: {md_path}"
-                    json_msg = f"JSON exported to: {json_path}"
-                    
-                    # Display export paths
-                    stdscr.addstr(y_center - 1, (width - len(md_msg)) // 2, md_msg, curses.color_pair(2))
-                    stdscr.addstr(y_center + 1, (width - len(json_msg)) // 2, json_msg, curses.color_pair(2))
-                    
-                    stdscr.addstr(y_center + 3, (width - 17) // 2, "Press any key...", curses.color_pair(3))
+
+                    exported_messages = []
+                    if md_path:
+                        exported_messages.append(f"Markdown exported to: {md_path}")
+                    if json_path:
+                        exported_messages.append(f"JSON exported to: {json_path}")
+
+                    start_y = y_center - (len(exported_messages) // 2)
+                    for i, msg in enumerate(exported_messages):
+                        stdscr.addstr(start_y + i, (width - len(msg)) // 2, msg, curses.color_pair(2))
+
+                    stdscr.addstr(start_y + len(exported_messages) + 2, (width - 17) // 2, "Press any key...", curses.color_pair(3))
                     stdscr.refresh()
                     stdscr.getch()
                 except Exception as e:
@@ -404,15 +418,21 @@ def main():
         action="store_true",
         help="Export all conversations to the exports directory without opening the UI.",
     )
+    parser.add_argument(
+        "--output-format",
+        choices=["both", "md", "json"],
+        default="both",
+        help="Choose exported file format(s): both (default), md, or json.",
+    )
     args = parser.parse_args()
 
     data_dir = resolve_data_directory(args.input_path)
     print(f"Using Claude data from: {data_dir}")
 
-    browser = ClaudeChatBrowser(data_dir)
+    browser = ClaudeChatBrowser(data_dir, output_format=args.output_format)
     if args.all:
         successful, failed = browser.export_all_conversations()
-        print(f"Exported {successful} conversation(s) to: {browser.export_dir}")
+        print(f"Exported {successful} conversation(s) as {args.output_format} to: {browser.export_dir}")
         if failed:
             print(f"Failed exports: {failed}", file=sys.stderr)
             sys.exit(1)
