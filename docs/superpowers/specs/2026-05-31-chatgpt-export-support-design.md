@@ -23,8 +23,6 @@ Example usage:
 ./chat_export_browser.py ./data-export-folder --all --output-format md
 ```
 
-The existing `claude_chat_browser.py` file remains as a small compatibility wrapper that delegates to `chat_export_browser.py`. This avoids abruptly breaking existing shell history, documentation links, or user habits.
-
 The UI and exported Markdown use provider-neutral language:
 
 ```text
@@ -191,7 +189,6 @@ Documentation should state:
 - ChatGPT attachments, images, canvas data, code-interpreter artifacts, and rich tool outputs are not rendered to Markdown in the first version.
 - Unsupported raw data remains available in JSON exports.
 - `chat_export_browser.py` is the primary command.
-- `claude_chat_browser.py` remains available as a compatibility wrapper.
 
 ## Non-Goals
 
@@ -212,7 +209,6 @@ This design does not add:
 - Existing Claude exports still browse and export successfully.
 - Standard text ChatGPT exports browse and export successfully.
 - The new primary script name is `chat_export_browser.py`.
-- The old script name still works as a wrapper.
 - Markdown exports are provider-neutral.
 - JSON exports preserve raw source data.
 - Automated tests cover detection, normalization, and export paths for both Claude and ChatGPT.
