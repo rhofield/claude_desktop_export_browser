@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
+import argparse
 import json
 import os
 import sys
 import datetime
-import shutil
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import curses
 
 class ClaudeChatBrowser:
@@ -148,6 +148,22 @@ class ClaudeChatBrowser:
             json.dump(export_conversation, f, indent=2, ensure_ascii=False)
             
         return md_file_path, json_file_path
+
+    def export_all_conversations(self) -> tuple[int, int]:
+        """Export all conversations. Returns (successful_exports, failed_exports)."""
+        successful_exports = 0
+        failed_exports = 0
+
+        for conversation in self.conversations:
+            try:
+                self.export_conversation(conversation)
+                successful_exports += 1
+            except Exception as e:
+                conversation_id = conversation.get('uuid', 'Unknown')
+                print(f"Warning: failed to export conversation {conversation_id}: {str(e)}", file=sys.stderr)
+                failed_exports += 1
+
+        return successful_exports, failed_exports
         
     def run_ui(self):
         """Run the curses UI."""
@@ -351,41 +367,58 @@ class ClaudeChatBrowser:
                 break
 
 
-def find_data_directory():
-    """Find the most recent Claude data export directory."""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dirs = []
-    
-    # Look for directories that match the pattern data-YYYY-MM-DD-HH-MM-SS
-    for item in os.listdir(base_dir):
-        if item.startswith('data-') and os.path.isdir(os.path.join(base_dir, item)):
-            # Extract date from directory name
-            try:
-                date_str = item[5:]  # Remove 'data-' prefix
-                date = datetime.datetime.strptime(date_str, '%Y-%m-%d-%H-%M-%S')
-                data_dirs.append((date, item))
-            except:
-                continue
-    
-    if not data_dirs:
-        print("Error: No Claude data export directories found.")
+def resolve_data_directory(input_path: str) -> str:
+    """Resolve a CLI input path into a Claude export directory containing conversations.json."""
+    absolute_path = os.path.abspath(input_path)
+
+    if os.path.isfile(absolute_path):
+        if os.path.basename(absolute_path) != "conversations.json":
+            print("Error: file input must be a conversations.json file.")
+            sys.exit(1)
+        data_dir = os.path.dirname(absolute_path)
+    elif os.path.isdir(absolute_path):
+        data_dir = absolute_path
+    else:
+        print(f"Error: path does not exist: {absolute_path}")
         sys.exit(1)
-        
-    # Sort by date (most recent first) and return the path
-    data_dirs.sort(reverse=True)
-    return os.path.join(base_dir, data_dirs[0][1])
+
+    conversations_path = os.path.join(data_dir, "conversations.json")
+    if not os.path.isfile(conversations_path):
+        print(f"Error: conversations.json not found in: {data_dir}")
+        sys.exit(1)
+
+    return data_dir
 
 
 def main():
     """Main entry point for the program."""
-    # Find the most recent data directory
-    data_dir = find_data_directory()
-    
+    parser = argparse.ArgumentParser(
+        description="Browse Claude conversations and export them to Markdown and JSON."
+    )
+    parser.add_argument(
+        "input_path",
+        help="Path to a Claude export directory or directly to conversations.json",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Export all conversations to the exports directory without opening the UI.",
+    )
+    args = parser.parse_args()
+
+    data_dir = resolve_data_directory(args.input_path)
     print(f"Using Claude data from: {data_dir}")
-    print("Starting browser interface...")
-    
-    # Initialize and run the browser
+
     browser = ClaudeChatBrowser(data_dir)
+    if args.all:
+        successful, failed = browser.export_all_conversations()
+        print(f"Exported {successful} conversation(s) to: {browser.export_dir}")
+        if failed:
+            print(f"Failed exports: {failed}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    print("Starting browser interface...")
     browser.run_ui()
 
 

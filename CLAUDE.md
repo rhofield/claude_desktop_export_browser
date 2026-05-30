@@ -6,7 +6,7 @@ This project provides tools for browsing and exporting Claude AI assistant chat 
 ## Tools & Commands
 - **Chat Browser**: `./claude_chat_browser.py` - Interactive CLI for browsing and exporting chats
 - **Installation**: No additional dependencies required (uses standard Python libraries)
-- **Usage**: Simply run the script in a directory containing Claude data exports
+- **Usage**: Run `./claude_chat_browser.py <path-to-export-folder-or-conversations.json>`
 
 ## Code Style Guidelines
 - **Formatting**: Use consistent indentation (4 spaces for Python)
@@ -29,7 +29,7 @@ This project provides tools for browsing and exporting Claude AI assistant chat 
   - Preserves complete conversation data in JSON format
   - Creates human-readable Markdown alongside machine-readable JSON
 - Navigation using arrow keys and keyboard shortcuts
-- Automatic detection of most recent Claude data export directory
+- Optional `--all` flag to export every conversation in one run
 
 ## Development Guidelines
 - Add new features by extending the ClaudeChatBrowser class

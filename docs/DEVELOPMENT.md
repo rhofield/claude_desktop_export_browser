@@ -16,6 +16,23 @@ The tool uses a simple object-oriented approach:
 - `ClaudeChatBrowser` class handles loading, displaying, and exporting conversations
 - `curses` library is used for the terminal UI
 - Standard Python libraries are used to keep dependencies minimal
+- `argparse` provides CLI input handling for path selection and batch export mode
+
+## CLI Interface
+
+The script now requires an explicit input path:
+
+- `./claude_chat_browser.py <path-to-export-folder-or-conversations.json>`
+
+Supported modes:
+
+- **Interactive mode** (default): opens the curses browser UI
+- **Batch mode**: `./claude_chat_browser.py <path> --all` exports all conversations without opening the UI
+
+Path validation behavior:
+
+- Accepts either a Claude export directory or a direct `conversations.json` file path
+- Exits with an error if the path does not exist or `conversations.json` cannot be found
 
 ## Code Style Guidelines
 
@@ -62,7 +79,7 @@ Potential areas for enhancement:
 - **Filtering**: Add options to filter by date range or conversation length
 - **Export Templates**: Customizable templates for Markdown exports
 - **Web UI**: A lightweight web interface as an alternative to the terminal UI
-- **Batch Operations**: Option to export multiple conversations at once
+- **Batch Filters**: Add selective batch export criteria (date range, message count, keyword)
 
 ## Debugging Tips
 

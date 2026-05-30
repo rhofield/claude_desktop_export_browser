@@ -10,7 +10,7 @@ A simple terminal tool that helps you browse and export conversations from your 
 1. Go to your [Claude account settings and export your data.](https://claude.ai/settings/account)
 2. Once you receive the email, download the zip file.
 3. Unzip the file and place the extracted folder in the same directory as this tool.
-4. Run the tool with `./claude_chat_browser.py`
+4. Run the tool with `./claude_chat_browser.py <path-to-export-folder-or-conversations.json>`
 5. Browse your conversations with arrow keys
 6. Press Enter to select a conversation
 7. Press Y to export to Markdown and JSON.
@@ -37,8 +37,13 @@ A simple terminal tool that helps you browse and export conversations from your 
 # Make executable (first time only)
 chmod +x claude_chat_browser.py
 
-# Start the browser
-./claude_chat_browser.py
+# Start the browser (pass export directory or conversations.json)
+./claude_chat_browser.py ./data-2025-03-02-15-59-23
+# or
+./claude_chat_browser.py ./data-2025-03-02-15-59-23/conversations.json
+
+# Export all conversations without opening the UI
+./claude_chat_browser.py ./data-2025-03-02-15-59-23 --all
 ```
 
 ### Step 3: Navigate and Export
@@ -58,7 +63,7 @@ When you export a conversation, two files are created in the `exports/` folder:
 
 ## Tips
 
-- The tool automatically finds the most recent Claude data export in your directory
+- Pass the export directory or `conversations.json` path via CLI input
 - Exported conversations have timestamps so you can see when each message was sent
 - Use the JSON exports if you want to process your conversations with other tools
 
