@@ -73,12 +73,37 @@ class ClaudeChatBrowser:
         msg_count = len(conversation.get('chat_messages', []))
         
         return f"{date_str} | {msg_count} msgs | {name}"
+
+    def _sanitize_filename_base(self, name: str) -> str:
+        """Create a safe base filename from a conversation title."""
+        safe_name = ''.join(c if c.isalnum() or c in ' _-' else '_' for c in (name or "")).strip()
+        if not safe_name:
+            safe_name = "conversation"
+        if len(safe_name) > 80:
+            safe_name = safe_name[:77] + "..."
+        return safe_name
+
+    def _build_unique_export_paths(self, base_name: str) -> tuple[str, str]:
+        """Build unique .md and .json paths for the selected output format."""
+        suffix = 0
+        while True:
+            current_base = base_name if suffix == 0 else f"{base_name} ({suffix})"
+            md_path = os.path.join(self.export_dir, f"{current_base}.md")
+            json_path = os.path.join(self.export_dir, f"{current_base}.json")
+
+            md_conflict = self.output_format in ("both", "md") and os.path.exists(md_path)
+            json_conflict = self.output_format in ("both", "json") and os.path.exists(json_path)
+
+            if not md_conflict and not json_conflict:
+                return md_path, json_path
+
+            suffix += 1
     
     def export_conversation(self, conversation: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
         """Export a conversation and return exported markdown/json paths (or None when skipped)."""
-        # Create a filename based on date and name or ID
-        name = conversation.get('name', '') or "conversation"
-        name = ''.join(c if c.isalnum() or c in ' _-' else '_' for c in name).strip()
+        # Create filename base from conversation title
+        original_name = conversation.get('name', '') or "conversation"
+        safe_name = self._sanitize_filename_base(original_name)
         date_str = "unknown_date"
         if 'updated_at' in conversation:
             try:
@@ -86,16 +111,9 @@ class ClaudeChatBrowser:
                 date_str = date.strftime("%Y%m%d_%H%M%S")
             except:
                 pass
-        
-        # Ensure name is not too long for a filename
-        if len(name) > 50:
-            name = name[:47] + "..."
-            
-        # Create file paths
-        md_filename = f"{date_str}_{name}.md"
-        json_filename = f"{date_str}_{name}.json"
-        md_file_path = os.path.join(self.export_dir, md_filename)
-        json_file_path = os.path.join(self.export_dir, json_filename)
+
+        # Create non-overwriting file paths
+        md_file_path, json_file_path = self._build_unique_export_paths(safe_name)
         
         # Create a copy of the conversation to sort messages by date
         export_conversation = conversation.copy()
@@ -109,7 +127,7 @@ class ClaudeChatBrowser:
             export_conversation['chat_messages'] = sorted_messages
         
         # Format conversation as markdown
-        markdown = [f"# {name or 'Claude Chat Conversation'}\n"]
+        markdown = [f"# {original_name or 'Claude Chat Conversation'}\n"]
         markdown.append(f"Date: {date_str}\n")
         markdown.append(f"ID: {conversation.get('uuid', 'Unknown')}\n\n")
         

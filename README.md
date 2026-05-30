@@ -65,13 +65,14 @@ chmod +x claude_chat_browser.py
 When you export a conversation, files are created in the `exports/` folder based on `--output-format`:
 
 - `both` (default): both files below
-- `md`: only `[date]_[name].md` (easy-to-read Markdown)
-- `json`: only `[date]_[name].json` (structured data for tools)
+- `md`: only `[name].md` (easy-to-read Markdown)
+- `json`: only `[name].json` (structured data for tools)
 
 ## Tips
 
 - Pass the export directory or `conversations.json` path via CLI input
 - Use `--output-format md` or `--output-format json` to export a single file type
+- If a filename already exists, the exporter adds ` (1)`, ` (2)`, etc. to avoid overwriting
 - Exported conversations have timestamps so you can see when each message was sent
 - Use the JSON exports if you want to process your conversations with other tools
 

@@ -34,6 +34,7 @@ Output format control:
 - `--output-format both` (default): write both `.md` and `.json`
 - `--output-format md`: write only `.md`
 - `--output-format json`: write only `.json`
+- Export filenames use conversation title only (`<title>.md` / `<title>.json`) with numeric suffixes on conflicts
 
 Path validation behavior:
 
