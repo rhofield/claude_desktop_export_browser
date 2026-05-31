@@ -7,7 +7,7 @@ import datetime
 from typing import List, Dict, Any, Optional
 import curses
 
-class ClaudeChatBrowser:
+class ChatExportBrowser:
     def __init__(self, data_dir: str, output_format: str = "both"):
         self.data_dir = data_dir
         self.output_format = output_format
@@ -447,7 +447,7 @@ def main():
     data_dir = resolve_data_directory(args.input_path)
     print(f"Using Claude data from: {data_dir}")
 
-    browser = ClaudeChatBrowser(data_dir, output_format=args.output_format)
+    browser = ChatExportBrowser(data_dir, output_format=args.output_format)
     if args.all:
         successful, failed = browser.export_all_conversations()
         print(f"Exported {successful} conversation(s) as {args.output_format} to: {browser.export_dir}")
