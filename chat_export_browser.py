@@ -87,6 +87,79 @@ def normalize_claude_conversation(conversation: Dict[str, Any]) -> Dict[str, Any
         "messages": messages,
         "raw": conversation,
     }
+
+def normalize_chatgpt_sender(role: str) -> str:
+    """Map ChatGPT roles to canonical sender names."""
+    if role in {"user", "assistant", "system", "tool"}:
+        return role
+    return "unknown"
+
+
+def extract_chatgpt_message_text(message: Dict[str, Any]) -> str:
+    """Extract renderable standard text from a ChatGPT message."""
+    content = message.get("content") or {}
+    if not isinstance(content, dict):
+        return ""
+
+    parts = content.get("parts") or []
+    text_parts = [part for part in parts if isinstance(part, str) and part]
+    return "\n\n".join(text_parts)
+
+
+def normalize_chatgpt_conversation(conversation: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert a ChatGPT conversation to the canonical internal shape."""
+    mapping = conversation.get("mapping") or {}
+    sortable_messages = []
+
+    for node in mapping.values():
+        if not isinstance(node, dict):
+            continue
+        message = node.get("message")
+        if not isinstance(message, dict):
+            continue
+
+        text = extract_chatgpt_message_text(message)
+        if not text:
+            continue
+
+        create_time = message.get("create_time")
+        author = message.get("author") or {}
+        role = author.get("role", "") if isinstance(author, dict) else ""
+        sortable_messages.append(
+            (
+                create_time if create_time is not None else 0,
+                {
+                    "sender": normalize_chatgpt_sender(role),
+                    "text": text,
+                    "created_at": normalize_timestamp(create_time),
+                },
+            )
+        )
+
+    sortable_messages.sort(key=lambda item: item[0])
+    messages = [message for _, message in sortable_messages]
+
+    title = conversation.get("title") or ""
+    if not title:
+        for message in messages:
+            if message["sender"] == "user" and message["text"]:
+                title = message["text"][:50]
+                break
+    if not title:
+        title = "Untitled conversation"
+
+    updated_at = conversation.get("update_time")
+    if updated_at is None and sortable_messages:
+        updated_at = sortable_messages[-1][0]
+
+    return {
+        "id": conversation.get("id") or "unknown",
+        "source": "chatgpt",
+        "title": title,
+        "updated_at": normalize_timestamp(updated_at),
+        "messages": messages,
+        "raw": conversation,
+    }
 class ChatExportBrowser:
     def __init__(self, data_dir: str, output_format: str = "both"):
         self.data_dir = data_dir

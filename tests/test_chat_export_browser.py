@@ -125,5 +125,106 @@ class ClaudeNormalizationTests(unittest.TestCase):
         self.assertEqual(normalized["messages"][0]["text"], "Text from content")
 
 
+
+class ChatGPTNormalizationTests(unittest.TestCase):
+    def test_normalizes_chatgpt_conversation_messages_in_time_order(self):
+        raw = {
+            "id": "chatgpt-1",
+            "title": "ChatGPT title",
+            "update_time": 1710000002.0,
+            "mapping": {
+                "assistant-node": {
+                    "message": {
+                        "author": {"role": "assistant"},
+                        "create_time": 1710000001.0,
+                        "content": {"content_type": "text", "parts": ["Hello user"]},
+                    }
+                },
+                "user-node": {
+                    "message": {
+                        "author": {"role": "user"},
+                        "create_time": 1710000000.0,
+                        "content": {"content_type": "text", "parts": ["Hello ChatGPT"]},
+                    }
+                },
+            },
+        }
+
+        normalized = chat_export_browser.normalize_chatgpt_conversation(raw)
+
+        self.assertEqual(normalized["id"], "chatgpt-1")
+        self.assertEqual(normalized["source"], "chatgpt")
+        self.assertEqual(normalized["title"], "ChatGPT title")
+        self.assertEqual(normalized["updated_at"], "2024-03-09T16:00:02+00:00")
+        self.assertEqual(normalized["raw"], raw)
+        self.assertEqual(
+            normalized["messages"],
+            [
+                {
+                    "sender": "user",
+                    "text": "Hello ChatGPT",
+                    "created_at": "2024-03-09T16:00:00+00:00",
+                },
+                {
+                    "sender": "assistant",
+                    "text": "Hello user",
+                    "created_at": "2024-03-09T16:00:01+00:00",
+                },
+            ],
+        )
+
+    def test_chatgpt_skips_empty_and_non_text_parts_but_preserves_raw(self):
+        raw = {
+            "id": "chatgpt-2",
+            "mapping": {
+                "empty-node": {
+                    "message": {
+                        "author": {"role": "user"},
+                        "create_time": 1710000000.0,
+                        "content": {"content_type": "text", "parts": [""]},
+                    }
+                },
+                "non-text-node": {
+                    "message": {
+                        "author": {"role": "assistant"},
+                        "create_time": 1710000001.0,
+                        "content": {"content_type": "multimodal_text", "parts": [{"asset_pointer": "file-service://image"}]},
+                    }
+                },
+                "text-node": {
+                    "message": {
+                        "author": {"role": "assistant"},
+                        "create_time": 1710000002.0,
+                        "content": {"content_type": "text", "parts": ["Renderable text"]},
+                    }
+                },
+            },
+        }
+
+        normalized = chat_export_browser.normalize_chatgpt_conversation(raw)
+
+        self.assertEqual(len(normalized["messages"]), 1)
+        self.assertEqual(normalized["messages"][0]["text"], "Renderable text")
+        self.assertEqual(normalized["raw"], raw)
+
+    def test_chatgpt_title_falls_back_to_first_user_message(self):
+        raw = {
+            "id": "chatgpt-3",
+            "mapping": {
+                "user-node": {
+                    "message": {
+                        "author": {"role": "user"},
+                        "create_time": 1710000000.0,
+                        "content": {"parts": ["Use this as title"]},
+                    }
+                }
+            },
+        }
+
+        normalized = chat_export_browser.normalize_chatgpt_conversation(raw)
+
+        self.assertEqual(normalized["title"], "Use this as title")
+
+
 if __name__ == "__main__":
     unittest.main()
