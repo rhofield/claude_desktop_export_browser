@@ -1,4 +1,6 @@
+import json
 import os
+import tempfile
 import unittest
 
 import chat_export_browser
@@ -224,6 +226,138 @@ class ChatGPTNormalizationTests(unittest.TestCase):
         normalized = chat_export_browser.normalize_chatgpt_conversation(raw)
 
         self.assertEqual(normalized["title"], "Use this as title")
+
+
+
+class ExportIntegrationTests(unittest.TestCase):
+    def make_export_dir(self, conversations):
+        temp_dir = tempfile.TemporaryDirectory()
+        with open(os.path.join(temp_dir.name, "conversations.json"), "w", encoding="utf-8") as handle:
+            json.dump(conversations, handle)
+        self.addCleanup(temp_dir.cleanup)
+        return temp_dir.name
+
+    def test_loads_claude_export_as_normalized_conversations(self):
+        data_dir = self.make_export_dir(
+            [
+                {
+                    "uuid": "claude-1",
+                    "name": "Claude title",
+                    "updated_at": "2025-03-02T15:59:23.000Z",
+                    "chat_messages": [
+                        {"sender": "human", "text": "Hello", "created_at": "2025-03-02T15:59:20.000Z"}
+                    ],
+                }
+            ]
+        )
+
+        browser = chat_export_browser.ChatExportBrowser(data_dir, output_format="both")
+
+        self.assertEqual(browser.source_format, "claude")
+        self.assertEqual(browser.conversations[0]["title"], "Claude title")
+        self.assertEqual(browser.conversations[0]["messages"][0]["sender"], "user")
+
+    def test_loads_chatgpt_export_as_normalized_conversations(self):
+        data_dir = self.make_export_dir(
+            [
+                {
+                    "id": "chatgpt-1",
+                    "title": "ChatGPT title",
+                    "update_time": 1710000001.0,
+                    "mapping": {
+                        "node": {
+                            "message": {
+                                "author": {"role": "assistant"},
+                                "create_time": 1710000000.0,
+                                "content": {"parts": ["Hello"]},
+                            }
+                        }
+                    },
+                }
+            ]
+        )
+
+        browser = chat_export_browser.ChatExportBrowser(data_dir, output_format="both")
+
+        self.assertEqual(browser.source_format, "chatgpt")
+        self.assertEqual(browser.conversations[0]["title"], "ChatGPT title")
+        self.assertEqual(browser.conversations[0]["messages"][0]["sender"], "assistant")
+
+    def test_exports_markdown_with_provider_neutral_labels(self):
+        data_dir = self.make_export_dir(
+            [
+                {
+                    "id": "chatgpt-1",
+                    "title": "ChatGPT title",
+                    "update_time": 1710000001.0,
+                    "mapping": {
+                        "user-node": {
+                            "message": {
+                                "author": {"role": "user"},
+                                "create_time": 1710000000.0,
+                                "content": {"parts": ["Hello ChatGPT"]},
+                            }
+                        },
+                        "assistant-node": {
+                            "message": {
+                                "author": {"role": "assistant"},
+                                "create_time": 1710000001.0,
+                                "content": {"parts": ["Hello user"]},
+                            }
+                        },
+                    },
+                }
+            ]
+        )
+        browser = chat_export_browser.ChatExportBrowser(data_dir, output_format="both")
+
+        md_path, json_path = browser.export_conversation(browser.conversations[0])
+
+        with open(md_path, "r", encoding="utf-8") as handle:
+            markdown = handle.read()
+        with open(json_path, "r", encoding="utf-8") as handle:
+            exported_json = json.load(handle)
+
+        self.assertIn("# ChatGPT title", markdown)
+        self.assertIn("**User**:", markdown)
+        self.assertIn("**Assistant**:", markdown)
+        self.assertNotIn("**Claude**:", markdown)
+        self.assertEqual(exported_json["source"], "chatgpt")
+        self.assertIn("raw", exported_json)
+
+    def test_output_format_md_only_writes_markdown_only(self):
+        data_dir = self.make_export_dir(
+            [
+                {
+                    "uuid": "claude-1",
+                    "name": "Claude title",
+                    "chat_messages": [{"sender": "human", "text": "Hello", "created_at": "1"}],
+                }
+            ]
+        )
+        browser = chat_export_browser.ChatExportBrowser(data_dir, output_format="md")
+
+        md_path, json_path = browser.export_conversation(browser.conversations[0])
+
+        self.assertTrue(os.path.exists(md_path))
+        self.assertIsNone(json_path)
+
+    def test_output_format_json_only_writes_json_only(self):
+        data_dir = self.make_export_dir(
+            [
+                {
+                    "uuid": "claude-1",
+                    "name": "Claude title",
+                    "chat_messages": [{"sender": "human", "text": "Hello", "created_at": "1"}],
+                }
+            ]
+        )
+        browser = chat_export_browser.ChatExportBrowser(data_dir, output_format="json")
+
+        md_path, json_path = browser.export_conversation(browser.conversations[0])
+
+        self.assertIsNone(md_path)
+        self.assertTrue(os.path.exists(json_path))
 
 
 if __name__ == "__main__":
