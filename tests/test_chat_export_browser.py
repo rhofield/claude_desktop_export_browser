@@ -13,5 +13,41 @@ class EntrypointRenameTests(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(repo_root, "claude_chat_browser.py")))
 
 
+
+class FormatDetectionTests(unittest.TestCase):
+    def test_detects_claude_export(self):
+        conversations = [{"uuid": "claude-1", "chat_messages": []}]
+        self.assertEqual(chat_export_browser.detect_export_format(conversations), "claude")
+
+    def test_detects_chatgpt_export(self):
+        conversations = [{"id": "chatgpt-1", "mapping": {}}]
+        self.assertEqual(chat_export_browser.detect_export_format(conversations), "chatgpt")
+
+    def test_rejects_unknown_export(self):
+        with self.assertRaises(ValueError) as context:
+            chat_export_browser.detect_export_format([{"id": "unknown"}])
+        self.assertIn("unsupported conversations.json format", str(context.exception))
+
+    def test_rejects_non_list_export(self):
+        with self.assertRaises(ValueError) as context:
+            chat_export_browser.detect_export_format({"mapping": {}})
+        self.assertIn("expected conversations.json to contain a list", str(context.exception))
+
+
+class TimestampFormattingTests(unittest.TestCase):
+    def test_formats_unix_timestamp_as_utc_iso_string(self):
+        self.assertEqual(
+            chat_export_browser.normalize_timestamp(1710000000.0),
+            "2024-03-09T16:00:00+00:00",
+        )
+
+    def test_preserves_existing_timestamp_string(self):
+        timestamp = "2025-03-02T15:59:23.000Z"
+        self.assertEqual(chat_export_browser.normalize_timestamp(timestamp), timestamp)
+
+    def test_empty_timestamp_becomes_empty_string(self):
+        self.assertEqual(chat_export_browser.normalize_timestamp(None), "")
+
+
 if __name__ == "__main__":
     unittest.main()

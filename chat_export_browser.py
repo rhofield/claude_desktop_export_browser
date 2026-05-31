@@ -7,6 +7,29 @@ import datetime
 from typing import List, Dict, Any, Optional
 import curses
 
+
+def normalize_timestamp(value: Any) -> str:
+    """Return a string timestamp, converting Unix timestamps to UTC ISO format."""
+    if value is None or value == "":
+        return ""
+    if isinstance(value, (int, float)):
+        return datetime.datetime.fromtimestamp(value, datetime.timezone.utc).isoformat()
+    return str(value)
+
+
+def detect_export_format(conversations: Any) -> str:
+    """Detect the provider format for a parsed conversations.json payload."""
+    if not isinstance(conversations, list):
+        raise ValueError("expected conversations.json to contain a list of conversations")
+
+    if any(isinstance(conversation, dict) and "chat_messages" in conversation for conversation in conversations):
+        return "claude"
+    if any(isinstance(conversation, dict) and "mapping" in conversation for conversation in conversations):
+        return "chatgpt"
+
+    raise ValueError(
+        "unsupported conversations.json format. Expected a Claude or ChatGPT conversations export."
+    )
 class ChatExportBrowser:
     def __init__(self, data_dir: str, output_format: str = "both"):
         self.data_dir = data_dir
