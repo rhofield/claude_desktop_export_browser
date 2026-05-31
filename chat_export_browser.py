@@ -7,11 +7,188 @@ import datetime
 from typing import List, Dict, Any, Optional
 import curses
 
-class ClaudeChatBrowser:
+
+def normalize_timestamp(value: Any) -> str:
+    """Return a string timestamp, converting Unix timestamps to UTC ISO format."""
+    if value is None or value == "":
+        return ""
+    if isinstance(value, (int, float)):
+        return datetime.datetime.fromtimestamp(value, datetime.timezone.utc).isoformat()
+    return str(value)
+
+
+def detect_export_format(conversations: Any) -> str:
+    """Detect the provider format for a parsed conversations.json payload."""
+    if not isinstance(conversations, list):
+        raise ValueError("expected conversations.json to contain a list of conversations")
+
+    if any(isinstance(conversation, dict) and "chat_messages" in conversation for conversation in conversations):
+        return "claude"
+    if any(isinstance(conversation, dict) and "mapping" in conversation for conversation in conversations):
+        return "chatgpt"
+
+    raise ValueError(
+        "unsupported conversations.json format. Expected a Claude or ChatGPT conversations export."
+    )
+
+def extract_claude_message_text(message: Dict[str, Any]) -> str:
+    """Extract text from a Claude message."""
+    text = message.get("text") or ""
+    if text:
+        return text
+
+    for content_item in message.get("content", []):
+        if isinstance(content_item, dict) and content_item.get("type") == "text":
+            return content_item.get("text", "") or ""
+
+    return ""
+
+
+def normalize_claude_sender(sender: str) -> str:
+    """Map Claude sender names to canonical sender names."""
+    if sender == "human":
+        return "user"
+    return "assistant"
+
+
+def normalize_claude_conversation(conversation: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert a Claude conversation to the canonical internal shape."""
+    raw_messages = conversation.get("chat_messages", [])
+    messages = []
+
+    for message in raw_messages:
+        if not isinstance(message, dict):
+            continue
+        text = extract_claude_message_text(message)
+        if not text:
+            continue
+        messages.append(
+            {
+                "sender": normalize_claude_sender(message.get("sender", "")),
+                "text": text,
+                "created_at": normalize_timestamp(message.get("created_at")),
+            }
+        )
+
+    title = conversation.get("name") or ""
+    if not title:
+        for message in messages:
+            if message["sender"] == "user" and message["text"]:
+                title = message["text"][:50]
+                break
+    if not title:
+        title = "Untitled conversation"
+
+    return {
+        "id": conversation.get("uuid") or conversation.get("id") or "unknown",
+        "source": "claude",
+        "title": title,
+        "updated_at": normalize_timestamp(conversation.get("updated_at")),
+        "messages": messages,
+        "raw": conversation,
+    }
+
+def normalize_chatgpt_sender(role: str) -> str:
+    """Map ChatGPT roles to canonical sender names."""
+    if role in {"user", "assistant", "system", "tool"}:
+        return role
+    return "unknown"
+
+
+def extract_chatgpt_message_text(message: Dict[str, Any]) -> str:
+    """Extract renderable standard text from a ChatGPT message."""
+    content = message.get("content") or {}
+    if not isinstance(content, dict):
+        return ""
+
+    parts = content.get("parts") or []
+    text_parts = [part for part in parts if isinstance(part, str) and part]
+    return "\n\n".join(text_parts)
+
+
+def normalize_chatgpt_conversation(conversation: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert a ChatGPT conversation to the canonical internal shape."""
+    mapping = conversation.get("mapping") or {}
+    sortable_messages = []
+
+    for node in mapping.values():
+        if not isinstance(node, dict):
+            continue
+        message = node.get("message")
+        if not isinstance(message, dict):
+            continue
+
+        text = extract_chatgpt_message_text(message)
+        if not text:
+            continue
+
+        create_time = message.get("create_time")
+        author = message.get("author") or {}
+        role = author.get("role", "") if isinstance(author, dict) else ""
+        sortable_messages.append(
+            (
+                create_time if create_time is not None else 0,
+                {
+                    "sender": normalize_chatgpt_sender(role),
+                    "text": text,
+                    "created_at": normalize_timestamp(create_time),
+                },
+            )
+        )
+
+    sortable_messages.sort(key=lambda item: item[0])
+    messages = [message for _, message in sortable_messages]
+
+    title = conversation.get("title") or ""
+    if not title:
+        for message in messages:
+            if message["sender"] == "user" and message["text"]:
+                title = message["text"][:50]
+                break
+    if not title:
+        title = "Untitled conversation"
+
+    updated_at = conversation.get("update_time")
+    if updated_at is None and sortable_messages:
+        updated_at = sortable_messages[-1][0]
+
+    return {
+        "id": conversation.get("id") or "unknown",
+        "source": "chatgpt",
+        "title": title,
+        "updated_at": normalize_timestamp(updated_at),
+        "messages": messages,
+        "raw": conversation,
+    }
+
+
+def normalize_conversation(conversation: Dict[str, Any], source_format: str) -> Dict[str, Any]:
+    """Normalize one raw conversation for the detected provider format."""
+    if source_format == "claude":
+        return normalize_claude_conversation(conversation)
+    if source_format == "chatgpt":
+        return normalize_chatgpt_conversation(conversation)
+    raise ValueError(f"unsupported export format: {source_format}")
+
+
+def format_sender_label(sender: str) -> str:
+    """Return a Markdown/UI label for a normalized sender."""
+    labels = {
+        "user": "User",
+        "assistant": "Assistant",
+        "system": "System",
+        "tool": "Tool",
+        "unknown": "Unknown",
+    }
+    return labels.get(sender, "Unknown")
+
+
+class ChatExportBrowser:
     def __init__(self, data_dir: str, output_format: str = "both"):
         self.data_dir = data_dir
         self.output_format = output_format
         self.conversations = []
+        self.source_format = ""
         self.conversations_path = os.path.join(data_dir, "conversations.json")
         self.page_size = 10
         self.current_page = 0
@@ -24,13 +201,19 @@ class ClaudeChatBrowser:
         self.load_conversations()
         
     def load_conversations(self):
-        """Load conversations from the JSON file."""
+        """Load and normalize conversations from the JSON file."""
         try:
-            with open(self.conversations_path, 'r') as f:
-                self.conversations = json.load(f)
-                
-            # Sort by updated_at timestamp (most recent first)
-            self.conversations.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
+            with open(self.conversations_path, "r", encoding="utf-8") as f:
+                raw_conversations = json.load(f)
+
+            self.source_format = detect_export_format(raw_conversations)
+            self.conversations = [
+                normalize_conversation(conversation, self.source_format)
+                for conversation in raw_conversations
+                if isinstance(conversation, dict)
+            ]
+
+            self.conversations.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
         except Exception as e:
             print(f"Error loading conversations: {str(e)}")
             sys.exit(1)
@@ -46,32 +229,18 @@ class ClaudeChatBrowser:
         return self.conversations[start_idx:end_idx]
     
     def format_conversation_title(self, conversation: Dict[str, Any]) -> str:
-        """Format a conversation for display in the list."""
-        # Use conversation name if available, otherwise use the first message text
-        name = conversation.get('name', '')
-        if not name and 'chat_messages' in conversation and conversation['chat_messages']:
-            for msg in conversation['chat_messages']:
-                if msg.get('sender') == 'human' and msg.get('text'):
-                    name = msg.get('text', '')[:50]
-                    if name:
-                        break
-                        
-        # Fallback if still no name
-        if not name:
-            name = "Untitled conversation"
-            
-        # Format date
+        """Format a normalized conversation for display in the list."""
+        name = conversation.get("title") or "Untitled conversation"
+
         date_str = "No date"
-        if 'updated_at' in conversation:
+        if conversation.get("updated_at"):
             try:
-                date = datetime.datetime.fromisoformat(conversation['updated_at'].replace('Z', '+00:00'))
+                date = datetime.datetime.fromisoformat(conversation["updated_at"].replace("Z", "+00:00"))
                 date_str = date.strftime("%Y-%m-%d %H:%M")
-            except:
+            except Exception:
                 pass
-                
-        # Count messages
-        msg_count = len(conversation.get('chat_messages', []))
-        
+
+        msg_count = len(conversation.get("messages", []))
         return f"{date_str} | {msg_count} msgs | {name}"
 
     def _sanitize_filename_base(self, name: str) -> str:
@@ -101,73 +270,56 @@ class ClaudeChatBrowser:
     
     def export_conversation(self, conversation: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
         """Export a conversation and return exported markdown/json paths (or None when skipped)."""
-        # Create filename base from conversation title
-        original_name = conversation.get('name', '') or "conversation"
+        original_name = conversation.get("title", "") or "conversation"
         safe_name = self._sanitize_filename_base(original_name)
         date_str = "unknown_date"
-        if 'updated_at' in conversation:
+        if conversation.get("updated_at"):
             try:
-                date = datetime.datetime.fromisoformat(conversation['updated_at'].replace('Z', '+00:00'))
+                date = datetime.datetime.fromisoformat(conversation["updated_at"].replace("Z", "+00:00"))
                 date_str = date.strftime("%Y%m%d_%H%M%S")
-            except:
+            except Exception:
                 pass
 
-        # Create non-overwriting file paths
         md_file_path, json_file_path = self._build_unique_export_paths(safe_name)
-        
-        # Create a copy of the conversation to sort messages by date
         export_conversation = conversation.copy()
-        
-        # Sort messages by creation date
-        if 'chat_messages' in export_conversation:
-            sorted_messages = sorted(
-                export_conversation['chat_messages'], 
-                key=lambda x: x.get('created_at', '0')
-            )
-            export_conversation['chat_messages'] = sorted_messages
-        
-        # Format conversation as markdown
-        markdown = [f"# {original_name or 'Claude Chat Conversation'}\n"]
+        export_conversation["messages"] = sorted(
+            conversation.get("messages", []),
+            key=lambda x: x.get("created_at", ""),
+        )
+
+        markdown = [f"# {original_name or 'Chat Conversation'}\n"]
         markdown.append(f"Date: {date_str}\n")
-        markdown.append(f"ID: {conversation.get('uuid', 'Unknown')}\n\n")
-        
-        # Add messages
-        for msg in export_conversation.get('chat_messages', []):
-            sender = "**User**:" if msg.get('sender') == 'human' else "**Claude**:"
-            text = msg.get('text', '')
-            
-            # If no text directly available, try to get it from content
-            if not text and 'content' in msg:
-                for content_item in msg['content']:
-                    if content_item.get('type') == 'text':
-                        text = content_item.get('text', '')
-                        break
-            
-            # Include timestamp if available
+        markdown.append(f"ID: {conversation.get('id', 'Unknown')}\n")
+        markdown.append(f"Source: {conversation.get('source', 'unknown')}\n\n")
+
+        for msg in export_conversation.get("messages", []):
+            sender = f"**{format_sender_label(msg.get('sender', 'unknown'))}**:"
+            text = msg.get("text", "")
+
             timestamp = ""
-            if msg.get('created_at'):
+            if msg.get("created_at"):
                 try:
-                    msg_date = datetime.datetime.fromisoformat(msg.get('created_at').replace('Z', '+00:00'))
+                    msg_date = datetime.datetime.fromisoformat(msg.get("created_at").replace("Z", "+00:00"))
                     timestamp = f"[{msg_date.strftime('%Y-%m-%d %H:%M:%S')}]"
-                except:
+                except Exception:
                     pass
-            
-            if text:  # Only add messages with content
+
+            if text:
                 if timestamp:
                     markdown.append(f"{sender} {timestamp}\n\n{text}\n\n---\n\n")
                 else:
                     markdown.append(f"{sender}\n\n{text}\n\n---\n\n")
-        
+
         exported_md_path = None
         exported_json_path = None
 
         if self.output_format in ("both", "md"):
-            with open(md_file_path, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(markdown))
+            with open(md_file_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(markdown))
             exported_md_path = md_file_path
 
         if self.output_format in ("both", "json"):
-            with open(json_file_path, 'w', encoding='utf-8') as f:
+            with open(json_file_path, "w", encoding="utf-8") as f:
                 json.dump(export_conversation, f, indent=2, ensure_ascii=False)
             exported_json_path = json_file_path
 
@@ -183,7 +335,7 @@ class ClaudeChatBrowser:
                 self.export_conversation(conversation)
                 successful_exports += 1
             except Exception as e:
-                conversation_id = conversation.get('uuid', 'Unknown')
+                conversation_id = conversation.get("id", "Unknown")
                 print(f"Warning: failed to export conversation {conversation_id}: {str(e)}", file=sys.stderr)
                 failed_exports += 1
 
@@ -216,8 +368,8 @@ class ClaudeChatBrowser:
             stdscr.clear()
             
             # Display header
-            header = "CLAUDE CHAT EXPORT BROWSER"
-            subheader = "Export your Claude Desktop chats"
+            header = "CHAT EXPORT BROWSER"
+            subheader = "Export your AI chat conversations"
             stdscr.addstr(0, (width - len(header)) // 2, header, curses.color_pair(2) | curses.A_BOLD)
             stdscr.addstr(1, (width - len(subheader)) // 2, subheader)
             
@@ -288,49 +440,41 @@ class ClaudeChatBrowser:
         stdscr.clear()
         
         # Display header
-        title = "CLAUDE CHAT EXPORT BROWSER"
+        title = "CHAT EXPORT BROWSER"
         subtitle = "CONVERSATION DETAILS"
         stdscr.addstr(0, (width - len(title)) // 2, title, curses.color_pair(2) | curses.A_BOLD)
         stdscr.addstr(1, (width - len(subtitle)) // 2, subtitle, curses.A_BOLD)
         
         # Display conversation info
-        name = conversation.get('name', '') or "Untitled conversation"
+        name = conversation.get("title", "") or "Untitled conversation"
         date_str = "No date"
-        if 'updated_at' in conversation:
+        if conversation.get("updated_at"):
             try:
-                date = datetime.datetime.fromisoformat(conversation['updated_at'].replace('Z', '+00:00'))
+                date = datetime.datetime.fromisoformat(conversation["updated_at"].replace("Z", "+00:00"))
                 date_str = date.strftime("%Y-%m-%d %H:%M")
-            except:
+            except Exception:
                 pass
-                
-        msg_count = len(conversation.get('chat_messages', []))
-        
+
+        msg_count = len(conversation.get("messages", []))
+
         info = [
             f"Title: {name}",
             f"Date: {date_str}",
+            f"Source: {conversation.get('source', 'unknown')}",
             f"Message count: {msg_count}",
-            f"ID: {conversation.get('uuid', 'Unknown')}"
+            f"ID: {conversation.get('id', 'Unknown')}",
         ]
-        
+
         # Display first few messages
         messages = []
-        for msg in conversation.get('chat_messages', [])[:3]:  # First 3 messages
-            sender = "User:" if msg.get('sender') == 'human' else "Claude:"
-            text = msg.get('text', '')
-            
-            # If no text directly available, try to get it from content
-            if not text and 'content' in msg:
-                for content_item in msg['content']:
-                    if content_item.get('type') == 'text':
-                        text = content_item.get('text', '')
-                        break
-            
-            # Truncate message if too long
+        for msg in conversation.get("messages", [])[:3]:
+            sender = f"{format_sender_label(msg.get('sender', 'unknown'))}:"
+            text = msg.get("text", "")
             if text:
                 if len(text) > 100:
                     text = text[:97] + "..."
                 messages.append(f"{sender} {text}")
-        
+
         # Display conversation info and preview
         y = 3  # Start at line 3 (after headers)
         for line in info:
@@ -400,7 +544,7 @@ class ClaudeChatBrowser:
 
 
 def resolve_data_directory(input_path: str) -> str:
-    """Resolve a CLI input path into a Claude export directory containing conversations.json."""
+    """Resolve a CLI input path into an export directory containing conversations.json."""
     absolute_path = os.path.abspath(input_path)
 
     if os.path.isfile(absolute_path):
@@ -425,11 +569,11 @@ def resolve_data_directory(input_path: str) -> str:
 def main():
     """Main entry point for the program."""
     parser = argparse.ArgumentParser(
-        description="Browse Claude conversations and export them to Markdown and JSON."
+        description="Browse Claude or ChatGPT conversations and export them to Markdown and JSON."
     )
     parser.add_argument(
         "input_path",
-        help="Path to a Claude export directory or directly to conversations.json",
+        help="Path to an export directory or directly to conversations.json",
     )
     parser.add_argument(
         "--all",
@@ -445,9 +589,9 @@ def main():
     args = parser.parse_args()
 
     data_dir = resolve_data_directory(args.input_path)
-    print(f"Using Claude data from: {data_dir}")
+    print(f"Using chat export data from: {data_dir}")
 
-    browser = ClaudeChatBrowser(data_dir, output_format=args.output_format)
+    browser = ChatExportBrowser(data_dir, output_format=args.output_format)
     if args.all:
         successful, failed = browser.export_all_conversations()
         print(f"Exported {successful} conversation(s) as {args.output_format} to: {browser.export_dir}")

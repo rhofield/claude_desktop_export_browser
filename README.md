@@ -1,19 +1,25 @@
-# Claude Chat Export Browser
-Export your Claude Desktop chats to Markdown and JSON
+# Chat Export Browser
+Export Claude and ChatGPT conversations to Markdown and JSON
 
-A simple terminal tool that helps you browse and export conversations from your Claude AI assistant data exports. Get your chat history in both human-readable Markdown and structured JSON formats.
+A simple terminal tool that helps you browse and export conversations from Claude or ChatGPT data exports. Get your chat history in both human-readable Markdown and structured JSON formats.
 
-![Claude Chat Export Browser Screenshot](images/claude_chat_exporter.png)
+![Chat Export Browser Screenshot](images/claude_chat_exporter.png)
 
 ## Quick Start
 
-1. Go to your [Claude account settings and export your data.](https://claude.ai/settings/account)
-2. Once you receive the email, download the zip file.
-3. Unzip the file and place the extracted folder in the same directory as this tool.
-4. Run the tool with `./claude_chat_browser.py <path-to-export-folder-or-conversations.json>`
-5. Browse your conversations with arrow keys
-6. Press Enter to select a conversation
-7. Press Y to export using your selected output format.
+1. Download your Claude or ChatGPT data export.
+2. Unzip the file.
+3. Run the tool with `./chat_export_browser.py <path-to-export-folder-or-conversations.json>`.
+4. Browse your conversations with arrow keys.
+5. Press Enter to select a conversation.
+6. Press Y to export using your selected output format.
+
+## Supported Inputs
+
+- Claude data exports containing `conversations.json`
+- ChatGPT data exports containing `conversations.json`
+
+ChatGPT support currently renders standard text messages only. Attachments, images, canvas data, code-interpreter artifacts, and rich tool outputs are not rendered to Markdown, but the original source data is preserved in JSON exports under `raw`.
 
 ## What You Can Do
 
@@ -25,37 +31,37 @@ A simple terminal tool that helps you browse and export conversations from your 
 
 ## How to Use
 
-### Step 1: Get Your Claude Data
+### Step 1: Get Your Data
 
-1. In Claude Desktop app, go to Settings → Export Data
-2. Download and extract the ZIP file
-3. Place the extracted folder (like `data-2025-03-02-15-59-23`) in the same directory as this tool
+- For Claude, go to your Claude account settings and export your data.
+- For ChatGPT, export your data from ChatGPT settings.
+- Download and extract the ZIP file.
 
 ### Step 2: Run the Browser
 
 ```bash
 # Make executable (first time only)
-chmod +x claude_chat_browser.py
+chmod +x chat_export_browser.py
 
-# Start the browser (pass export directory or conversations.json)
-./claude_chat_browser.py ./data-2025-03-02-15-59-23
+# Start the browser with a Claude or ChatGPT export directory
+./chat_export_browser.py ./data-export-folder
 # or
-./claude_chat_browser.py ./data-2025-03-02-15-59-23/conversations.json
+./chat_export_browser.py ./data-export-folder/conversations.json
 
 # Export all conversations without opening the UI
-./claude_chat_browser.py ./data-2025-03-02-15-59-23 --all
+./chat_export_browser.py ./data-export-folder --all
 
 # Export markdown files only
-./claude_chat_browser.py ./data-2025-03-02-15-59-23 --output-format md
+./chat_export_browser.py ./data-export-folder --output-format md
 
 # Export JSON files only (works with --all too)
-./claude_chat_browser.py ./data-2025-03-02-15-59-23 --all --output-format json
+./chat_export_browser.py ./data-export-folder --all --output-format json
 ```
 
 ### Step 3: Navigate and Export
 
-- **Navigate**: Use ↑/↓ arrows to select conversations
-- **Change Pages**: Use ←/→ arrows to move between pages (10 conversations per page)
+- **Navigate**: Use up/down arrows to select conversations
+- **Change Pages**: Use left/right arrows to move between pages (10 conversations per page)
 - **View Details**: Press Enter to see conversation details
 - **Export**: Press Y when prompted to save in the selected format
 - **Exit**: Press Q to quit
@@ -66,7 +72,7 @@ When you export a conversation, files are created in the `exports/` folder based
 
 - `both` (default): both files below
 - `md`: only `[name].md` (easy-to-read Markdown)
-- `json`: only `[name].json` (structured data for tools)
+- `json`: only `[name].json` (structured data for tools, including the original source data under `raw`)
 
 ## Tips
 
