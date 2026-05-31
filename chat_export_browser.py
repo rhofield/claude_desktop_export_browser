@@ -544,7 +544,7 @@ class ChatExportBrowser:
 
 
 def resolve_data_directory(input_path: str) -> str:
-    """Resolve a CLI input path into a Claude export directory containing conversations.json."""
+    """Resolve a CLI input path into an export directory containing conversations.json."""
     absolute_path = os.path.abspath(input_path)
 
     if os.path.isfile(absolute_path):
@@ -569,11 +569,11 @@ def resolve_data_directory(input_path: str) -> str:
 def main():
     """Main entry point for the program."""
     parser = argparse.ArgumentParser(
-        description="Browse Claude conversations and export them to Markdown and JSON."
+        description="Browse Claude or ChatGPT conversations and export them to Markdown and JSON."
     )
     parser.add_argument(
         "input_path",
-        help="Path to a Claude export directory or directly to conversations.json",
+        help="Path to an export directory or directly to conversations.json",
     )
     parser.add_argument(
         "--all",
@@ -589,7 +589,7 @@ def main():
     args = parser.parse_args()
 
     data_dir = resolve_data_directory(args.input_path)
-    print(f"Using Claude data from: {data_dir}")
+    print(f"Using chat export data from: {data_dir}")
 
     browser = ChatExportBrowser(data_dir, output_format=args.output_format)
     if args.all:

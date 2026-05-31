@@ -1,33 +1,37 @@
-# Claude Chat Export Browser - Development Guide
+# Chat Export Browser - Development Guide
 
-This document provides information for developers who want to contribute to or modify the Claude Chat Export Browser tool.
+This document provides information for developers who want to contribute to or modify the Chat Export Browser tool.
 
 ## Project Structure
 
-- `claude_chat_browser.py` - Main application file (terminal UI and export functionality)
+- `chat_export_browser.py` - Main application file (terminal UI, normalization, and export functionality)
+- `tests/` - Standard-library `unittest` test suite
 - `exports/` - Directory where exported conversations are stored
 - `docs/` - Documentation for developers
-- `CLAUDE.md` - Additional guidelines for Claude AI when working with this codebase
+- `CLAUDE.md` - Additional guidelines for AI assistants when working with this codebase
 
 ## Architecture
 
 The tool uses a simple object-oriented approach:
 
-- `ClaudeChatBrowser` class handles loading, displaying, and exporting conversations
+- `ChatExportBrowser` class handles loading, displaying, and exporting conversations
+- Provider-specific exports are normalized into a common internal conversation shape before UI or export code runs
+- Claude and ChatGPT detection happens from the parsed `conversations.json` structure
+- Keep provider-specific parsing in normalization helpers so UI and export code consume only the canonical conversation shape
 - `curses` library is used for the terminal UI
-- Standard Python libraries are used to keep dependencies minimal
+- The app intentionally remains dependency-free and uses Python's standard library only
 - `argparse` provides CLI input handling for path selection and batch export mode
 
 ## CLI Interface
 
-The script now requires an explicit input path:
+The script requires an explicit input path:
 
-- `./claude_chat_browser.py <path-to-export-folder-or-conversations.json>`
+- `./chat_export_browser.py <path-to-export-folder-or-conversations.json>`
 
 Supported modes:
 
 - **Interactive mode** (default): opens the curses browser UI
-- **Batch mode**: `./claude_chat_browser.py <path> --all` exports all conversations without opening the UI
+- **Batch mode**: `./chat_export_browser.py <path> --all` exports all conversations without opening the UI
 
 Output format control:
 
@@ -38,8 +42,15 @@ Output format control:
 
 Path validation behavior:
 
-- Accepts either a Claude export directory or a direct `conversations.json` file path
+- Accepts either an export directory or a direct `conversations.json` file path
 - Exits with an error if the path does not exist or `conversations.json` cannot be found
+
+## Supported Inputs
+
+- Claude data exports containing `conversations.json`
+- ChatGPT data exports containing `conversations.json`
+
+ChatGPT support currently renders standard text messages only. Attachments, images, canvas data, code-interpreter artifacts, and rich tool outputs are not rendered to Markdown, but the original source data is preserved in JSON exports under `raw`.
 
 ## Code Style Guidelines
 
@@ -61,22 +72,13 @@ When extending the functionality, consider the following guidelines:
 2. **Export Formats**: Maintain the dual approach of human-readable + machine-readable formats
 3. **Backward Compatibility**: Ensure compatibility with existing Claude data export formats
 4. **Error Handling**: Add robust error handling for any new functionality
-
-### How to Add a New Export Format
-
-To add a new export format:
-
-1. Create a new method in the `ClaudeChatBrowser` class (follow the pattern of `export_conversation`)
-2. Modify the success message display to include the new format
-3. Update the documentation to reflect the new export option
+5. **Normalization First**: Add provider-specific parsing to normalization helpers before changing UI or export code
 
 ## Testing
 
-Currently, the project has no automated tests. When adding tests:
+Run all tests with `python3 -m unittest discover -v`.
 
-1. Create a `tests/` directory
-2. Use Python's standard `unittest` library
-3. Add test data (sample conversations) in a `tests/data/` directory
+Tests use Python's standard `unittest` library and live in `tests/`.
 
 ## Future Improvements
 
@@ -87,6 +89,7 @@ Potential areas for enhancement:
 - **Export Templates**: Customizable templates for Markdown exports
 - **Web UI**: A lightweight web interface as an alternative to the terminal UI
 - **Batch Filters**: Add selective batch export criteria (date range, message count, keyword)
+- **Rich ChatGPT Content**: Render attachments, images, canvas data, or code-interpreter artifacts
 
 ## Debugging Tips
 

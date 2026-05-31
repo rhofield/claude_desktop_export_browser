@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 
@@ -358,6 +359,38 @@ class ExportIntegrationTests(unittest.TestCase):
 
         self.assertIsNone(md_path)
         self.assertTrue(os.path.exists(json_path))
+
+
+
+class CliBehaviorTests(unittest.TestCase):
+    def test_help_uses_generic_description(self):
+        result = subprocess.run(
+            ["python3", "chat_export_browser.py", "--help"],
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Browse Claude or ChatGPT conversations", result.stdout)
+        self.assertNotIn("Path to a Claude export", result.stdout)
+
+    def test_missing_conversations_json_error_is_provider_neutral(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+
+        result = subprocess.run(
+            ["python3", "chat_export_browser.py", temp_dir.name],
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("conversations.json not found", result.stdout)
+        self.assertNotIn("Claude", result.stdout)
 
 
 if __name__ == "__main__":
