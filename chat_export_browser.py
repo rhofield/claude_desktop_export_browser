@@ -30,6 +30,63 @@ def detect_export_format(conversations: Any) -> str:
     raise ValueError(
         "unsupported conversations.json format. Expected a Claude or ChatGPT conversations export."
     )
+
+def extract_claude_message_text(message: Dict[str, Any]) -> str:
+    """Extract text from a Claude message."""
+    text = message.get("text") or ""
+    if text:
+        return text
+
+    for content_item in message.get("content", []):
+        if isinstance(content_item, dict) and content_item.get("type") == "text":
+            return content_item.get("text", "") or ""
+
+    return ""
+
+
+def normalize_claude_sender(sender: str) -> str:
+    """Map Claude sender names to canonical sender names."""
+    if sender == "human":
+        return "user"
+    return "assistant"
+
+
+def normalize_claude_conversation(conversation: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert a Claude conversation to the canonical internal shape."""
+    raw_messages = conversation.get("chat_messages", [])
+    messages = []
+
+    for message in raw_messages:
+        if not isinstance(message, dict):
+            continue
+        text = extract_claude_message_text(message)
+        if not text:
+            continue
+        messages.append(
+            {
+                "sender": normalize_claude_sender(message.get("sender", "")),
+                "text": text,
+                "created_at": normalize_timestamp(message.get("created_at")),
+            }
+        )
+
+    title = conversation.get("name") or ""
+    if not title:
+        for message in messages:
+            if message["sender"] == "user" and message["text"]:
+                title = message["text"][:50]
+                break
+    if not title:
+        title = "Untitled conversation"
+
+    return {
+        "id": conversation.get("uuid") or conversation.get("id") or "unknown",
+        "source": "claude",
+        "title": title,
+        "updated_at": normalize_timestamp(conversation.get("updated_at")),
+        "messages": messages,
+        "raw": conversation,
+    }
 class ChatExportBrowser:
     def __init__(self, data_dir: str, output_format: str = "both"):
         self.data_dir = data_dir
